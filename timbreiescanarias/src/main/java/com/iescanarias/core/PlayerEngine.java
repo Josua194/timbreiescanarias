@@ -46,6 +46,39 @@ public class PlayerEngine {
                     scheduleTimeout(BELL_MAX_SECONDS);
                 }
 
+                // Volumen configurado
+                final int volPct = song.getCategory() == Category.AMBIENTE ? 
+                        com.iescanarias.config.AppConfig.getAmbienteVolume() : 
+                        com.iescanarias.config.AppConfig.getTimbreVolume();
+
+                // Hilo para aplicar volumen una vez abierta la línea de audio
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(200); // Esperar a que AdvancedPlayer abra la línea
+                        java.lang.reflect.Field deviceField = AdvancedPlayer.class.getDeclaredField("audio");
+                        deviceField.setAccessible(true);
+                        Object audioDevice = deviceField.get(currentPlayer);
+                        if (audioDevice != null) {
+                            java.lang.reflect.Field sourceField = audioDevice.getClass().getDeclaredField("source");
+                            sourceField.setAccessible(true);
+                            javax.sound.sampled.SourceDataLine sourceLine = (javax.sound.sampled.SourceDataLine) sourceField.get(audioDevice);
+                            if (sourceLine != null && sourceLine.isControlSupported(javax.sound.sampled.FloatControl.Type.MASTER_GAIN)) {
+                                javax.sound.sampled.FloatControl gainControl = (javax.sound.sampled.FloatControl) sourceLine.getControl(javax.sound.sampled.FloatControl.Type.MASTER_GAIN);
+                                float val = volPct / 100f;
+                                if (val <= 0.01f) {
+                                    gainControl.setValue(gainControl.getMinimum());
+                                } else {
+                                    float dB = (float) (Math.log10(val) * 20.0);
+                                    gainControl.setValue(dB);
+                                }
+                                System.out.println("[PLAYER] Volumen ajustado a " + volPct + "%");
+                            }
+                        }
+                    } catch (Exception e) {
+                        System.err.println("[PLAYER] No se pudo ajustar el volumen: " + e.getMessage());
+                    }
+                }).start();
+
                 currentPlayer.play();
 
             } catch (Exception e) {

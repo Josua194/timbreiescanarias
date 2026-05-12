@@ -50,12 +50,11 @@ public class Main {
             System.out.println("[MAIN] Aplicación cerrada.");
         }));
 
-        // Mantener vivo el hilo principal
-        try {
-            Thread.currentThread().join();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        // 5. Iniciar la interfaz gráfica
+        javax.swing.SwingUtilities.invokeLater(() -> {
+            com.iescanarias.ui.MainFrame mainFrame = new com.iescanarias.ui.MainFrame(songDAO);
+            mainFrame.setVisible(true);
+        });
     }
 
     private static void seedData(SongDAO dao) {

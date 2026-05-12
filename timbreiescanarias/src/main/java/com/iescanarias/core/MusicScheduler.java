@@ -21,11 +21,6 @@ public class MusicScheduler {
     private final PlayerEngine player;
     private final ScheduledExecutorService scheduler;
 
-    private int recurrenteIndex = 0;
-    private int especialIndex   = 0;
-    private int ambienteIndex   = 0;
-
-    // Evita disparar el mismo timbre dos veces en el mismo intervalo
     private int lastBellInterval = -1;
 
     public MusicScheduler(SongDAO songDAO, PlayerEngine player) {
@@ -119,32 +114,17 @@ public class MusicScheduler {
     }
 
     private void playNext(Category category) {
-        List<Song> songs = songDAO.getByCategory(category);
-
-        if (songs.isEmpty()) {
-            System.out.println("[SCHEDULER] Sin canciones en: " + category);
-            if (category == Category.ESPECIAL) playNext(Category.RECURRENTE);
-            return;
+        Song song = null;
+        if (category == Category.AMBIENTE) {
+            song = com.iescanarias.config.AppConfig.getSelectedAmbiente();
+        } else {
+            song = com.iescanarias.config.AppConfig.getSelectedTimbre();
         }
 
-        // Rotación secuencial sin shuffle (predecible y sin repetir hasta acabar la lista)
-        Song song = switch (category) {
-            case RECURRENTE -> {
-                Song s = songs.get(recurrenteIndex % songs.size());
-                recurrenteIndex++;
-                yield s;
-            }
-            case ESPECIAL -> {
-                Song s = songs.get(especialIndex % songs.size());
-                especialIndex++;
-                yield s;
-            }
-            case AMBIENTE -> {
-                Song s = songs.get(ambienteIndex % songs.size());
-                ambienteIndex++;
-                yield s;
-            }
-        };
+        if (song == null) {
+            System.out.println("[SCHEDULER] Sin canción seleccionada para: " + category);
+            return;
+        }
 
         player.play(song);
     }
