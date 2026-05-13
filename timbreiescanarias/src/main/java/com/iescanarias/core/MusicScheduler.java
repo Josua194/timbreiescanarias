@@ -14,6 +14,8 @@ public class MusicScheduler {
 
     private static final LocalTime AMBIENTE_START   = LocalTime.of(7, 0);
     private static final LocalTime RECURRENTE_START = LocalTime.of(8, 0);
+    private static final LocalTime RECREO_START     = LocalTime.of(10, 45);
+    private static final LocalTime RECREO_END       = LocalTime.of(11, 15);
     private static final LocalTime SYSTEM_END       = LocalTime.of(14, 0);
     private static final int INTERVAL_MINUTES       = 55;
 
@@ -44,7 +46,7 @@ public class MusicScheduler {
         System.out.println("[SCHEDULER] Sistema detenido.");
     }
 
-   private boolean ambienteActivo = false;
+    private boolean ambienteActivo = false;
     private boolean primerTimbreSonado = false;
 
     private void tick() {
@@ -64,7 +66,7 @@ public class MusicScheduler {
                 return;
             }
 
-            // ── Franja AMBIENTE ───────────────────────────────────────────
+            // ── Franja AMBIENTE: 7:00–7:59 ───────────────────────────────
             if (now.isBefore(RECURRENTE_START)) {
                 ambienteActivo = true;
                 primerTimbreSonado = false;
@@ -75,8 +77,7 @@ public class MusicScheduler {
                 return;
             }
 
-            // ── Transición AMBIENTE → TIMBRE ──────────────────────────────
-            // Cuando llegamos a RECURRENTE_START, paramos el ambiente y sonamos el primer timbre
+            // ── Transición AMBIENTE → TIMBRE (exactamente 8:00) ──────────
             if (ambienteActivo) {
                 System.out.println("[TICK] → Transición: parando ambiente, sonando primer timbre");
                 player.stop();
@@ -87,14 +88,37 @@ public class MusicScheduler {
                 return;
             }
 
-            // ── Franja TIMBRE: cada 55 min ────────────────────────────────
-            int minutesSinceStart = (now.getHour() - RECURRENTE_START.getHour()) * 60 
+            // ── Franja RECREO: 10:45–11:15 ───────────────────────────────
+            boolean esRecreo = !now.isBefore(RECREO_START) && now.isBefore(RECREO_END);
+            if (esRecreo) {
+                if (!player.isPlaying()) {
+                    System.out.println("[TICK] → Franja RECREO, poniendo ambiente");
+                    playNext(Category.AMBIENTE);
+                }
+                lastBellInterval = -2; // marca especial: venimos del recreo
+                return;
+            }
+
+            // ── Timbre de vuelta del recreo (exactamente 11:15) ──────────
+            boolean esVueltaRecreo = !now.isBefore(RECREO_END) &&
+                                    now.isBefore(RECREO_END.plusSeconds(10)) &&
+                                    lastBellInterval == -2;
+            if (esVueltaRecreo) {
+                System.out.println("[TICK] → Vuelta de recreo, sonando timbre");
+                player.stop();
+                lastBellInterval = -1;
+                playNext(pickCategory());
+                return;
+            }
+
+            // ── Franja TIMBRE: 8:00–14:00, cada 55 min ───────────────────
+            int minutesSinceStart = (now.getHour() - RECURRENTE_START.getHour()) * 60
                                     + (now.getMinute() - RECURRENTE_START.getMinute());
             int totalSeconds      = minutesSinceStart * 60 + now.getSecond();
             int currentInterval   = totalSeconds / (INTERVAL_MINUTES * 60);
             int secondsIntoSlot   = totalSeconds % (INTERVAL_MINUTES * 60);
 
-            System.out.println("[TICK] → Franja TIMBRE | intervalo=" + currentInterval 
+            System.out.println("[TICK] → Franja TIMBRE | intervalo=" + currentInterval
                 + " | segundosEnSlot=" + secondsIntoSlot + " | lastBell=" + lastBellInterval);
 
             if (secondsIntoSlot < 10 && currentInterval != lastBellInterval) {
@@ -107,7 +131,6 @@ public class MusicScheduler {
             e.printStackTrace();
         }
     }
-
     private Category pickCategory() {
         List<Song> especiales = songDAO.getByCategory(Category.ESPECIAL);
         return especiales.isEmpty() ? Category.RECURRENTE : Category.ESPECIAL;
